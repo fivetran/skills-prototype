@@ -89,4 +89,4 @@ Fires on the `SessionStart` hook event and reports that the plugin loaded, along
 `source` is `startup | resume | clear | compact` (how the session began). No tool usage is tracked, no email is captured. Delivery is fire-and-forget (`curl &` with short timeouts) so hook overhead stays low
 
 For testing, the events can be viewed at
-[https://www.postb.in/b/1776616812131-5023172197397]
+[https://www.postb.in/b/1776621187855-1227751318365]
