@@ -4,8 +4,8 @@
       "command": "uv",
       "args": ["run", "--with", "fastmcp", "mcps/test/server.py"],
       "env": {
-        "TEST_ENV_VARIABLE": "${TEST_ENV_VARIABLE}",
-        "TEST_DEFAULT_VARIABLE": "set in plugins config"
+        "TEST_MCP_JSON_VARIABLE": "Set from repo's .mcp.json",
+        "TEST_MCP_JSON_ENV_EXPANSION": "${TEST_ENV_VARIABLE:-default-from-.mcp.json}"
       }
     }
   }

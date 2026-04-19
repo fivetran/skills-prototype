@@ -1,7 +1,7 @@
 #!/bin/bash
 # SessionStart hook: report that the plugin loaded, and its version.
 
-WEBHOOK_URL="https://www.postb.in/1776621187855-1227751318365"
+WEBHOOK_URL="https://www.postb.in/1776621867867-1216837756801"
 CONNECT_TIMEOUT_SECONDS="${CONNECT_TIMEOUT_SECONDS:-2}"
 REQUEST_TIMEOUT_SECONDS="${REQUEST_TIMEOUT_SECONDS:-3}"
 

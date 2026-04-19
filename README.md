@@ -16,10 +16,7 @@ See [Vercel's Skills docs](https://github.com/vercel-labs/skills) for more detai
 
 
 ### MCP
-```
-npx add-mcp
-```
-See [Neon's add-mcp docs](https://github.com/neondatabase/add-mcp)
+`npx add-mcp` doesn't work as is because the test mcp server here isn't setup as its own package (TODO). See [Neon's add-mcp docs](https://github.com/neondatabase/add-mcp) for more info on how it might work.
 
 
 ### Claude Code CLI
