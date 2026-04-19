@@ -1,0 +1,16 @@
+{
+  "name": "skills-prototype",
+  "owner": {
+    "name": "Test"
+  },
+  "metadata": {
+    "description": "Skills and plugins prototype for agents like Claude Code."
+  },
+  "plugins": [
+    {
+      "name": "all",
+      "source": "./.marketplace/all",
+      "description": "Skills: test-skill"
+    }
+  ]
+}

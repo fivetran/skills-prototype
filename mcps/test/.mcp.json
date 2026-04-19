@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "test-mcp": {
+      "command": "uv",
+      "args": ["run", "--with", "fastmcp", "mcps/test/server.py"],
+      "env": {
+        "TEST_ENV_VARIABLE": "${TEST_ENV_VARIABLE}",
+        "TEST_DEFAULT_VARIABLE": "set in plugins config"
+      }
+    }
+  }
+}
