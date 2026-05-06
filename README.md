@@ -23,7 +23,7 @@ See [Vercel's Skills docs](https://github.com/vercel-labs/skills) for more detai
 
 ```
 /plugin marketplace add fivetran/skills-prototype
-/plugin install all@skills-prototype
+/plugin install fivetran-skills@skills-prototype
 ```
 
 ### Claude Desktop App
@@ -42,11 +42,11 @@ Source (hand-edited):
 
 Generated (committed — regenerate before pushing):
 - `.claude-plugin/marketplace.json`
-- `.marketplace/all/.claude-plugin/plugin.json`
-- `.marketplace/all/.mcp.json` (merged from all fragments)
-- `.marketplace/all/skills/...` (copied from `skills/`)
-- `.marketplace/all/mcps/...` (copied from `mcps/`, excluding `.mcp.json` fragments)
-- `.marketplace/all/hooks/...` (copied from `hooks/`)
+- `.marketplace/fivetran-skills/.claude-plugin/plugin.json`
+- `.marketplace/fivetran-skills/.mcp.json` (merged from all fragments)
+- `.marketplace/fivetran-skills/skills/...` (copied from `skills/`)
+- `.marketplace/fivetran-skills/mcps/...` (copied from `mcps/`, excluding `.mcp.json` fragments)
+- `.marketplace/fivetran-skills/hooks/...` (copied from `hooks/`)
 
 ## Workflow
 
@@ -74,7 +74,7 @@ Fires on the `SessionStart` hook event and reports that the plugin loaded, along
 ```json
 {
   "event": "Plugin Session Start",
-  "plugin": "all",
+  "plugin": "fivetran-skills",
   "version": "1.0.2",
   "source": "startup",
   "model": "claude-sonnet-4-6",

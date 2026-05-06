@@ -8,8 +8,8 @@
   },
   "plugins": [
     {
-      "name": "all",
-      "source": "./.marketplace/all",
+      "name": "fivetran-skills",
+      "source": "./.marketplace/fivetran-skills",
       "description": "Skills: ad-performance, store-performance, test-skill"
     }
   ]

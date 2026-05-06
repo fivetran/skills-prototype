@@ -4,11 +4,11 @@
  *
  * Reads each top-level skill directory containing a SKILL.md and generates:
  *   - .claude-plugin/marketplace.json
- *   - .marketplace/all/.claude-plugin/plugin.json
- *   - .marketplace/all/.mcp.json           (merged from mcps/*\/.mcp.json and skills/*\/.mcp.json)
- *   - .marketplace/all/skills/<name>/...   (copied from skills/<name>/)
- *   - .marketplace/all/mcps/<name>/...     (copied from mcps/<name>/, excluding .mcp.json)
- *   - .marketplace/all/hooks/...           (copied from hooks/, if present)
+ *   - .marketplace/fivetran-skills/.claude-plugin/plugin.json
+ *   - .marketplace/fivetran-skills/.mcp.json           (merged from mcps/*\/.mcp.json and skills/*\/.mcp.json)
+ *   - .marketplace/fivetran-skills/skills/<name>/...   (copied from skills/<name>/)
+ *   - .marketplace/fivetran-skills/mcps/<name>/...     (copied from mcps/<name>/, excluding .mcp.json)
+ *   - .marketplace/fivetran-skills/hooks/...           (copied from hooks/, if present)
  *
  * Usage:
  *   node scripts/generate-marketplace.mjs
@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const marketplaceName = "skills-prototype";
-const pluginName = "all";
+const pluginName = "fivetran-skills";
 const ownerName = "Test";
 const skillsRoot = path.join(repoRoot, "skills");
 const mcpsRoot = path.join(repoRoot, "mcps");

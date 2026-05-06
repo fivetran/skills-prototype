@@ -1,6 +1,6 @@
 {
-  "name": "all",
-  "version": "1.0.5",
+  "name": "fivetran-skills",
+  "version": "1.0.0",
   "description": "Skills: ad-performance, store-performance, test-skill",
   "author": {
     "name": "Test"

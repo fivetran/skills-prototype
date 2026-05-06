@@ -35,7 +35,7 @@ This skill uses a local profile at `~/.fivetran/skills/ecommerce-analyzer/profil
 
 1. **Validate the local profile.**
    ```bash
-   bash .marketplace/all/skills/store-performance/asa.sh validate
+   bash .marketplace/fivetran-skills/skills/store-performance/asa.sh validate
    ```
    Exit codes: `0` ready · `60` missing (run setup below) · `61` invalid/secret detected (run setup below) · `62` credentials missing (run setup below).
 
@@ -45,18 +45,18 @@ This skill uses a local profile at `~/.fivetran/skills/ecommerce-analyzer/profil
 
    > To finish setup, open a terminal and run:
    > ```
-   > bash .marketplace/all/skills/store-performance/asa.sh setup --skill store-performance
+   > bash .marketplace/fivetran-skills/skills/store-performance/asa.sh setup --skill store-performance
    > ```
    > It will prompt for your Fivetran API key and secret (input is hidden). Get them from https://fivetran.com/account/settings/api-config. Let me know when it's done.
 
    After showing the command, ask: *"Want me to copy that to your clipboard?"* If they say yes:
-   - macOS: `echo 'bash .marketplace/all/skills/store-performance/asa.sh setup --skill store-performance' | pbcopy`
-   - Windows: `echo bash .marketplace/all/skills/store-performance/asa.sh setup --skill store-performance | clip`
-   - Linux: `echo 'bash .marketplace/all/skills/store-performance/asa.sh setup --skill store-performance' | xclip -selection clipboard 2>/dev/null || echo '...' | xsel --clipboard 2>/dev/null`
+   - macOS: `echo 'bash .marketplace/fivetran-skills/skills/store-performance/asa.sh setup --skill store-performance' | pbcopy`
+   - Windows: `echo bash .marketplace/fivetran-skills/skills/store-performance/asa.sh setup --skill store-performance | clip`
+   - Linux: `echo 'bash .marketplace/fivetran-skills/skills/store-performance/asa.sh setup --skill store-performance' | xclip -selection clipboard 2>/dev/null || echo '...' | xsel --clipboard 2>/dev/null`
 
    Once they say they're done, re-run `validate`. If it returns `0`, continue to Step 3. If it still returns `60`, silently run setup yourself (credentials are now stored, no env vars needed):
    ```bash
-   bash .marketplace/all/skills/store-performance/asa.sh setup --skill store-performance 2>&1; echo "EXIT:$?"
+   bash .marketplace/fivetran-skills/skills/store-performance/asa.sh setup --skill store-performance 2>&1; echo "EXIT:$?"
    ```
 
    **Setup exit codes:**
@@ -69,7 +69,7 @@ This skill uses a local profile at `~/.fivetran/skills/ecommerce-analyzer/profil
 
 3. **Resolve connector context.** For shopify (and later: woocommerce, bigcommerce, recharge), call:
    ```bash
-   bash .marketplace/all/skills/store-performance/asa.sh resolve shopify
+   bash .marketplace/fivetran-skills/skills/store-performance/asa.sh resolve shopify
    ```
    It returns single-line JSON with `database`, `warehouse_tool`, `raw_schema`, `model_tier`, `destination_type`, etc. For ecommerce v1 there is no Fivetran QDM (dbt quickstart) for shopify, so `model_tier` will almost always be `raw` and queries hit `raw_schema`. Bind these to placeholders used throughout this skill:
    - `{DATABASE}` ← `database`
@@ -78,7 +78,7 @@ This skill uses a local profile at `~/.fivetran/skills/ecommerce-analyzer/profil
 
    **On `relation not found`**, retry with `--refresh-on-miss`:
    ```bash
-   bash .marketplace/all/skills/store-performance/asa.sh resolve shopify --refresh-on-miss
+   bash .marketplace/fivetran-skills/skills/store-performance/asa.sh resolve shopify --refresh-on-miss
    ```
 
 4. **Pick the warehouse CLI** from `{WAREHOUSE_TOOL}`:
@@ -90,7 +90,7 @@ This skill uses a local profile at `~/.fivetran/skills/ecommerce-analyzer/profil
 
 ### Demo / preconfigured profile
 
-For demos — showing the skill against a fixed warehouse without standing up a real Fivetran account — copy `.marketplace/all/skills/store-performance/local/profile.example.json` to `~/.fivetran/skills/ecommerce-analyzer/profile.json` (or set `ECOMMERCE_ANALYZER_PROFILE_PATH`), then edit `database` and the connector's `raw_schema` to point at your demo warehouse and Shopify-shaped dataset (e.g. `database = "ECOMMERCE_ANALYZER"`, `raw_schema = "SHOPIFY"`). Invoke the skill normally; `validate` passes and the rest of the flow runs against the demo data. Delete the profile to return to first-run state.
+For demos — showing the skill against a fixed warehouse without standing up a real Fivetran account — copy `.marketplace/fivetran-skills/skills/store-performance/local/profile.example.json` to `~/.fivetran/skills/ecommerce-analyzer/profile.json` (or set `ECOMMERCE_ANALYZER_PROFILE_PATH`), then edit `database` and the connector's `raw_schema` to point at your demo warehouse and Shopify-shaped dataset (e.g. `database = "ECOMMERCE_ANALYZER"`, `raw_schema = "SHOPIFY"`). Invoke the skill normally; `validate` passes and the rest of the flow runs against the demo data. Delete the profile to return to first-run state.
 
 ### Tables the skill expects (the 7 v1 tables — Fivetran-Shopify schema)
 
@@ -192,7 +192,7 @@ WHERE _fivetran_deleted = FALSE;
 **If any table is missing or empty:** Tell the user "The Shopify connector
 data isn't loaded into `{DATABASE}.{SCHEMA}`. Connect Shopify in your
 Fivetran account so it syncs to this destination, or check the demo profile
-template at `.marketplace/all/skills/store-performance/local/`."
+template at `.marketplace/fivetran-skills/skills/store-performance/local/`."
 
 **If `latest_order` is > 7 days old:** Warn on every response: "Note: latest
 order in the data is `<date>`. Results don't reflect the last `<n>` days."
@@ -435,7 +435,7 @@ ORDER BY customer_type;
 
 | Error | Response |
 |---|---|
-| Warehouse connection failure | Re-run `bash .marketplace/all/skills/store-performance/asa.sh check-cli <bq\|snowflake_cli\|databricks_cli>` to verify the CLI is installed and authenticated. Surface the printed remediation. |
+| Warehouse connection failure | Re-run `bash .marketplace/fivetran-skills/skills/store-performance/asa.sh check-cli <bq\|snowflake_cli\|databricks_cli>` to verify the CLI is installed and authenticated. Surface the printed remediation. |
 | Permission denied | "Query failed: permission denied on `{DATABASE}.{SCHEMA}`. Verify your role has `USAGE` on the database/schema and `SELECT` on the tables." |
 | Stale data (>7 days) | Inline warning: "Latest order in the data is `<date>` (N days ago). Results don't reflect very recent activity." |
 | Empty result set | "Query returned no rows. Possible causes: filters may be too narrow, or the date range may not contain orders." |
