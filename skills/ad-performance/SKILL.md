@@ -9,10 +9,9 @@ description: >
   Trigger on: "how are our ads performing", "ad spend", "campaign performance",
   "cost per click", "ROAS", "impressions", "CTR", "ad performance", "marketing analytics",
   "compare channels", "cross-channel", "Facebook vs Google", "budget allocation".
-allowed-tools: "bash(bq, gcloud, snow, databricks, open, python3)"
+allowed-tools: "bash(bq, gcloud, snow, snowsql, databricks, open, python3, pip)"
 metadata:
   short-description: Cross-channel ad performance analysis via BigQuery, Snowflake, or Databricks
-  team: product
   owner: "Abdul Ghaffar <abdul.ghaffar@fivetran.com>"
 user-invocable: true
 argument-hint: "<question about ad performance>"
@@ -24,7 +23,7 @@ You are a marketing data analyst with live access to cross-channel ad performanc
 
 ## Configuration (run once per session)
 
-This skill uses a local profile at `~/.fivetran/skills/ad-spend-analyzer/profile.json` to remember the user's warehouse and connector preferences across sessions. First run creates it; subsequent runs reuse it.
+This skill uses a local profile at `~/.fivetran/skills/ad-performance/profile.json` to remember the user's warehouse and connector preferences across sessions. First run creates it; subsequent runs reuse it.
 
 1. **Validate the local profile.**
    ```bash
@@ -100,6 +99,7 @@ This skill uses a local profile at `~/.fivetran/skills/ad-spend-analyzer/profile
    - `bq`               → `bq query --use_legacy_sql=false ...`
    - `snowflake_cli`    → `snow sql -q ...`
    - `databricks_cli`   → `databricks sql ...`
+   - **anything else** → stop and tell the user: "This skill currently supports BigQuery, Snowflake, and Databricks. Your destination type (`<warehouse_tool>`) isn't in that list. Re-run setup against a supported warehouse, or open an issue requesting support."
 
 5. **Refresh on relation-not-found.** If a query fails because a table or schema is missing, rerun resolve with refresh:
    ```bash
@@ -110,7 +110,7 @@ This skill uses a local profile at `~/.fivetran/skills/ad-spend-analyzer/profile
 
 ### Demo / preconfigured profile
 
-For demos — showing the skill against a fixed warehouse without standing up a real Fivetran account — copy `.marketplace/fivetran-skills/skills/ad-performance/local/profile.example.json` to `~/.fivetran/skills/ad-spend-analyzer/profile.json` (or any path via `AD_SPEND_ANALYZER_PROFILE_PATH`), then edit `database` and each connector's `unified_schema` to point at your demo BigQuery `project.dataset`. Remove any connector entries whose families don't have data in the dataset. Invoke the skill normally; `validate` passes and the rest of the flow runs against the demo data. Delete the profile to return to first-run state. See `local/README.md` for details.
+For demos — showing the skill against a fixed warehouse without standing up a real Fivetran account — copy `.marketplace/fivetran-skills/skills/ad-performance/local/profile.example.json` to `~/.fivetran/skills/ad-performance/profile.json` (or any path via `AD_PERFORMANCE_PROFILE_PATH`), then edit `database` and each connector's `unified_schema` to point at your demo BigQuery `project.dataset`. Remove any connector entries whose families don't have data in the dataset. Invoke the skill normally; `validate` passes and the rest of the flow runs against the demo data. Delete the profile to return to first-run state. See `local/README.md` for details.
 
 ## Behavioral Rules
 
@@ -274,7 +274,7 @@ Compute all derived metrics in SQL. Always use NULLIF to prevent division by zer
 
 ## Query Rules
 
-- Always: `--project_id={PROJECT_ID} --use_legacy_sql=false`
+- **BigQuery only:** pass `--project_id={PROJECT_ID} --use_legacy_sql=false` to every `bq query` call. (Snowflake and Databricks have their own connection settings — see "Pick the warehouse CLI" above.)
 - **First query of every session:** Get the latest data date per platform using a table from `active_models` (use `ad_reporting__monthly_campaign_country_report` when `campaign_report` is excluded):
   ```sql
   SELECT platform, MAX(date_month) as latest_date, COUNT(DISTINCT campaign_id) as active_campaigns
@@ -338,50 +338,9 @@ python3 .marketplace/fivetran-skills/skills/ad-performance/generate-dashboard.py
 open /tmp/ad_dashboard.html
 ```
 
-**Payload schema** (all sections optional except `title`):
-```json
-{
-  "title": "Cross-Channel Ad Performance",
-  "subtitle": "7 platforms · Apr 1 – May 1, 2026",
-  "badge": "Data current as of May 1, 2026",
-  "kpis": [
-    {"label": "Total Spend", "value": "$109K", "change": "+18%", "direction": "up", "prior": "Prior: $92K"}
-  ],
-  "charts": [
-    {
-      "id": "chart1",
-      "title": "Spend by Platform",
-      "layout": "half",
-      "height": 280,
-      "script": "new Chart(document.getElementById('chart1'), { type: 'bar', data: { labels: [...], datasets: [{ label: 'Current', data: [...], backgroundColor: '#0073FF', borderRadius: 4 }] }, options: { ...chartDefaults, scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' } } } } });"
-    }
-  ],
-  "anomalies": {"title": "Anomalies Detected", "items": ["..."]},
-  "table": {
-    "title": "Campaign Performance",
-    "columns": [
-      {"key": "platform", "label": "Platform"},
-      {"key": "spend", "label": "Spend", "align": "right"},
-      {"key": "tier", "label": "Rating"}
-    ],
-    "rows": [
-      {"platform": "Google Ads", "spend": "$12,981", "tier": {"html": "<span class='tier-badge tier-winner'>Winner</span>"}},
-      {"platform": "Facebook Ads", "spend": "$5,423", "tier": {"html": "<span class='tier-badge tier-waste'>Waste</span>"}, "_row_class": "highlight-waste"}
-    ]
-  },
-  "custom_sections": [{"title": "Optional Section", "html": "<p>Any HTML</p>"}],
-  "footer": "Generated by Fivetran Ad Spend Analyzer · May 1, 2026"
-}
-```
-
-**Key rules:**
-- `charts[].script` — write the full `new Chart(...)` call as a JS string. It is injected verbatim into the page `<script>` block after `fivetranColors` and `chartDefaults` are defined, so you can spread those. **Write real JavaScript here** — callbacks, dynamic per-bar colors, dual axes, tooltip formatters all work because this is actual JS, not a JSON config.
-- `table.rows` cell values: plain string = HTML-escaped; `{"html": "..."}` = raw HTML (use for tier badges).
-- `table.rows._row_class`: `"highlight-waste"` (red tint), `"highlight-winner"` (green tint), `"highlight-caution"` (yellow tint).
-- `custom_sections` injects raw HTML cards — use for non-Chart.js content, geographic tables, etc.
-- Run `--help-schema` for the full schema reference.
-
-**Escape hatch (rare):** Only fall back to writing HTML manually if the page structure itself cannot be expressed as cards / chart grid / table / anomalies — e.g. a multi-page report or embedded iframe app. Custom chart types, axis formatters, and dynamic colors all fit in the `script` field.
+For the full payload schema (JSON shape, key rules, escape hatch), see
+[`dashboard-schema.md`](./dashboard-schema.md) in this skill's directory.
+Read it on demand only when the user asks for a visualization.
 
 ## Error Handling
 

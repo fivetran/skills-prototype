@@ -6,10 +6,10 @@ This directory lets you run the store-performance skill against a fixed warehous
 
 1. Copy the template to the standard profile path:
    ```sh
-   cp .marketplace/ecommerce-analyzer/local/profile.example.json \
-      ~/.fivetran/skills/ecommerce-analyzer/profile.json
+   cp .marketplace/fivetran-skills/skills/store-performance/local/profile.example.json \
+      ~/.fivetran/skills/store-performance/profile.json
    ```
-   (Or set `ECOMMERCE_ANALYZER_PROFILE_PATH=/some/other/path.json` and copy there.)
+   (Or set `STORE_PERFORMANCE_PROFILE_PATH=/some/other/path.json` and copy there.)
 
 2. Edit the copy:
    - Replace `<YOUR_DATABASE>` with your demo warehouse (e.g. `ECOMMERCE_ANALYZER` for the bundled Snowflake demo, or `<your-gcp-project>` for BigQuery).
@@ -18,7 +18,7 @@ This directory lets you run the store-performance skill against a fixed warehous
 
 3. Invoke the skill normally — `validate` passes, `resolve`/`readiness` operate against your warehouse, the verified queries run as-is.
 
-To return to a normal Fivetran-driven setup: `rm ~/.fivetran/skills/ecommerce-analyzer/profile.json` and re-invoke the skill.
+To return to a normal Fivetran-driven setup: `rm ~/.fivetran/skills/store-performance/profile.json` and re-invoke the skill.
 
 ## Why this directory exists
 

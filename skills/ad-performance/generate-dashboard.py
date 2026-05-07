@@ -302,7 +302,7 @@ def render(template_path, data):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Render an ad-spend-analyzer HTML dashboard from a JSON payload."
+        description="Render an ad-performance HTML dashboard from a JSON payload."
     )
     parser.add_argument("--data", help="Path to JSON payload file (default: read from stdin)")
     parser.add_argument(

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-asa.py — unified ecommerce-analyzer entry point.
+asa.py — unified store-performance entry point.
 
 Subcommands:
   validate                                    # 0=ok | 60=missing | 61=invalid
@@ -76,17 +76,17 @@ MOCK_FETCHER = os.environ.get("ASA_FIVETRAN_FETCHER", "")
 
 
 def _config_dir() -> str:
-    if os.environ.get("ECOMMERCE_ANALYZER_CONFIG_DIR"):
-        return os.environ["ECOMMERCE_ANALYZER_CONFIG_DIR"]
-    local = "./.fivetran/ecommerce-analyzer"
+    if os.environ.get("STORE_PERFORMANCE_CONFIG_DIR"):
+        return os.environ["STORE_PERFORMANCE_CONFIG_DIR"]
+    local = "./.fivetran/store-performance"
     if os.path.isdir(local):
         return local
-    return os.path.join(os.path.expanduser("~"), ".fivetran", "skills", "ecommerce-analyzer")
+    return os.path.join(os.path.expanduser("~"), ".fivetran", "skills", "store-performance")
 
 
 def _profile_path() -> str:
-    if os.environ.get("ECOMMERCE_ANALYZER_PROFILE_PATH"):
-        return os.environ["ECOMMERCE_ANALYZER_PROFILE_PATH"]
+    if os.environ.get("STORE_PERFORMANCE_PROFILE_PATH"):
+        return os.environ["STORE_PERFORMANCE_PROFILE_PATH"]
     return os.path.join(_config_dir(), "profile.json")
 
 
@@ -586,7 +586,7 @@ def cmd_setup(
             print(
                 "[asa] Fivetran credentials not found.\n"
                 "Run setup in your own terminal (credentials will be prompted securely):\n"
-                "  bash .marketplace/ecommerce-analyzer/scripts/asa.sh setup --skill <skill-id>",
+                "  bash .marketplace/store-performance/scripts/asa.sh setup --skill <skill-id>",
                 file=sys.stderr,
             )
             return EXIT_CREDS_MISSING

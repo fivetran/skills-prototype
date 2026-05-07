@@ -12,10 +12,9 @@ description: >
   "AOV", "average order value", "repeat rate", "refund rate", "top products",
   "best sellers", "customer cohorts", "new vs returning", "Black Friday",
   "BFCM", "Cyber Monday", "Q4 performance", "monthly orders", "seasonality".
-allowed-tools: "bash(snow, snowsql, bq, databricks, python3, pip, open)"
+allowed-tools: "bash(bq, gcloud, snow, snowsql, databricks, open, python3, pip)"
 metadata:
   short-description: E-commerce store performance analysis from raw Shopify connector data
-  team: product
   owner: "Abdul Ghaffar <abdul.ghaffar@fivetran.com>"
 user-invocable: true
 argument-hint: "<question about your store>"
@@ -31,7 +30,7 @@ have an ongoing conversation with the user; maintain context across messages.
 
 ## Configuration (run once per session)
 
-This skill uses a local profile at `~/.fivetran/skills/ecommerce-analyzer/profile.json` to remember the user's warehouse and connector preferences across sessions. First run creates it; subsequent runs reuse it.
+This skill uses a local profile at `~/.fivetran/skills/store-performance/profile.json` to remember the user's warehouse and connector preferences across sessions. First run creates it; subsequent runs reuse it.
 
 1. **Validate the local profile.**
    ```bash
@@ -85,12 +84,13 @@ This skill uses a local profile at `~/.fivetran/skills/ecommerce-analyzer/profil
    - `bq`              → `bq query --use_legacy_sql=false --project_id={DATABASE} ...`
    - `snowflake_cli`   → `snow sql -q ...` (use `{DATABASE}.{SCHEMA}.<table>` in queries; quote `"order"` since it's reserved)
    - `databricks_cli`  → `databricks sql ...`
+   - **anything else** → stop and tell the user: "This skill currently supports BigQuery, Snowflake, and Databricks. Your destination type (`<warehouse_tool>`) isn't in that list. Re-run setup against a supported warehouse, or open an issue requesting support."
 
 > **Note:** the verified query patterns below assume Snowflake syntax and `model_tier == raw`. For BigQuery / Databricks, adapt identifier quoting/case as needed. The `"order"` table is reserved across all three engines — quote it.
 
 ### Demo / preconfigured profile
 
-For demos — showing the skill against a fixed warehouse without standing up a real Fivetran account — copy `.marketplace/fivetran-skills/skills/store-performance/local/profile.example.json` to `~/.fivetran/skills/ecommerce-analyzer/profile.json` (or set `ECOMMERCE_ANALYZER_PROFILE_PATH`), then edit `database` and the connector's `raw_schema` to point at your demo warehouse and Shopify-shaped dataset (e.g. `database = "ECOMMERCE_ANALYZER"`, `raw_schema = "SHOPIFY"`). Invoke the skill normally; `validate` passes and the rest of the flow runs against the demo data. Delete the profile to return to first-run state.
+For demos — showing the skill against a fixed warehouse without standing up a real Fivetran account — copy `.marketplace/fivetran-skills/skills/store-performance/local/profile.example.json` to `~/.fivetran/skills/store-performance/profile.json` (or set `STORE_PERFORMANCE_PROFILE_PATH`), then edit `database` and the connector's `raw_schema` to point at your demo warehouse and Shopify-shaped dataset (e.g. `database = "ECOMMERCE_ANALYZER"`, `raw_schema = "SHOPIFY"`). Invoke the skill normally; `validate` passes and the rest of the flow runs against the demo data. Delete the profile to return to first-run state.
 
 ### Tables the skill expects (the 7 v1 tables — Fivetran-Shopify schema)
 

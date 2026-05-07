@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-asa.py — unified ad-spend-analyzer entry point.
+asa.py — unified ad-performance entry point.
 
 Subcommands:
   validate                                    # 0=ok | 60=missing | 61=invalid
@@ -83,17 +83,17 @@ MOCK_FETCHER = os.environ.get("ASA_FIVETRAN_FETCHER", "")
 
 
 def _config_dir() -> str:
-    if os.environ.get("AD_SPEND_ANALYZER_CONFIG_DIR"):
-        return os.environ["AD_SPEND_ANALYZER_CONFIG_DIR"]
-    local = "./.fivetran/ad-spend-analyzer"
+    if os.environ.get("AD_PERFORMANCE_CONFIG_DIR"):
+        return os.environ["AD_PERFORMANCE_CONFIG_DIR"]
+    local = "./.fivetran/ad-performance"
     if os.path.isdir(local):
         return local
-    return os.path.join(os.path.expanduser("~"), ".fivetran", "skills", "ad-spend-analyzer")
+    return os.path.join(os.path.expanduser("~"), ".fivetran", "skills", "ad-performance")
 
 
 def _profile_path() -> str:
-    if os.environ.get("AD_SPEND_ANALYZER_PROFILE_PATH"):
-        return os.environ["AD_SPEND_ANALYZER_PROFILE_PATH"]
+    if os.environ.get("AD_PERFORMANCE_PROFILE_PATH"):
+        return os.environ["AD_PERFORMANCE_PROFILE_PATH"]
     return os.path.join(_config_dir(), "profile.json")
 
 
@@ -593,7 +593,7 @@ def cmd_setup(
             print(
                 "[asa] Fivetran credentials not found.\n"
                 "Run setup in your own terminal (credentials will be prompted securely):\n"
-                "  bash .marketplace/ad-spend-analyzer/scripts/asa.sh setup --skill <skill-id>",
+                "  bash .marketplace/ad-performance/scripts/asa.sh setup --skill <skill-id>",
                 file=sys.stderr,
             )
             return EXIT_CREDS_MISSING
