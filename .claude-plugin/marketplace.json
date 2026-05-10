@@ -1,16 +1,31 @@
 {
   "name": "skills-prototype",
   "owner": {
-    "name": "Test"
+    "name": "Fivetran"
   },
   "metadata": {
     "description": "Skills and plugins prototype for agents like Claude Code."
   },
   "plugins": [
     {
-      "name": "fivetran-skills",
-      "source": "./.marketplace/fivetran-skills",
-      "description": "Skills: ad-performance, store-performance, test-skill"
+      "name": "base",
+      "source": "./.marketplace/base",
+      "description": "Test skill that reports MCP server environment info"
+    },
+    {
+      "name": "ad-performance",
+      "source": "./.marketplace/ad-performance",
+      "description": "Cross-channel ad performance analysis via BigQuery, Snowflake, or Databricks"
+    },
+    {
+      "name": "store-performance",
+      "source": "./.marketplace/store-performance",
+      "description": "E-commerce store performance analysis from raw Shopify connector data"
+    },
+    {
+      "name": "all",
+      "source": "./.marketplace/all",
+      "description": "All skills: ad-performance, store-performance, test-skill"
     }
   ]
 }

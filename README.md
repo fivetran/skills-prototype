@@ -23,7 +23,9 @@ See [Vercel's Skills docs](https://github.com/vercel-labs/skills) for more detai
 
 ```
 /plugin marketplace add fivetran/skills-prototype
-/plugin install fivetran-skills@skills-prototype
+/plugin install base@skills-prototype       # default skills only
+/plugin install all@skills-prototype        # every skill in the repo
+/plugin install <plugin>@skills-prototype   # one named plugin (see Layout below)
 ```
 
 ### Claude Desktop App
@@ -35,18 +37,24 @@ See [Vercel's Skills docs](https://github.com/vercel-labs/skills) for more detai
 ## Layout
 
 Source (hand-edited):
-- `skills/<name>/SKILL.md` — skill definitions
+- `skills/<name>/SKILL.md` — skill definitions. Add `metadata.plugin: <plugin-name>` to route a skill into a named plugin; skills with no `plugin` field land in `base`. (`base` and `all` are reserved.)
 - `mcps/<name>/.mcp.json` — MCP server config fragments (merged at build)
 - `mcps/<name>/` — MCP server source files
-- `hooks/hooks.json` + `hooks/*.sh` — plugin hooks (see **Analytics hook** below)
+- `mcps/plugins.json` *(optional)* — maps each MCP directory name to an array of plugin names it should ship in. Example: `{ "test": ["ad-analytics"] }`. MCPs with no entry default to `base`. Every MCP also ships in `all` regardless.
+- `hooks/hooks.json` + `hooks/*.sh` — plugin hooks (see **Analytics hook** below). Copied into every plugin.
+
+Plugins emitted:
+- `base` — every skill without a `metadata.plugin`, plus any MCP without (or explicitly opting into) a `mcps/plugins.json` entry. Replaces the old `fivetran-skills` plugin.
+- One plugin per distinct `metadata.plugin` value (and/or per plugin name appearing in `mcps/plugins.json`).
+- `all` — every skill and every MCP, regardless of declarations.
 
 Generated (committed — regenerate before pushing):
 - `.claude-plugin/marketplace.json`
-- `.marketplace/fivetran-skills/.claude-plugin/plugin.json`
-- `.marketplace/fivetran-skills/.mcp.json` (merged from all fragments)
-- `.marketplace/fivetran-skills/skills/...` (copied from `skills/`)
-- `.marketplace/fivetran-skills/mcps/...` (copied from `mcps/`, excluding `.mcp.json` fragments)
-- `.marketplace/fivetran-skills/hooks/...` (copied from `hooks/`)
+- `.marketplace/<plugin>/.claude-plugin/plugin.json` (one per plugin)
+- `.marketplace/<plugin>/.mcp.json` (merged from that plugin's MCP fragments)
+- `.marketplace/<plugin>/skills/...` (copied from `skills/`)
+- `.marketplace/<plugin>/mcps/...` (copied from `mcps/`, excluding `.mcp.json` fragments)
+- `.marketplace/<plugin>/hooks/...` (copied from `hooks/`)
 
 ## Workflow
 

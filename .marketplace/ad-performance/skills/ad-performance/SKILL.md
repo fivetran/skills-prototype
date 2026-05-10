@@ -11,6 +11,7 @@ description: >
   "compare channels", "cross-channel", "Facebook vs Google", "budget allocation".
 allowed-tools: "bash(bq, gcloud, snow, snowsql, databricks, open, python3, pip)"
 metadata:
+  plugin: ad-performance
   short-description: Cross-channel ad performance analysis via BigQuery, Snowflake, or Databricks
   owner: "Abdul Ghaffar <abdul.ghaffar@fivetran.com>"
 user-invocable: true
