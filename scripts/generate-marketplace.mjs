@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /**
- * Generates a single-plugin marketplace from the repo's skills/ and mcps/ directories.
+ * Generates a multi-plugin marketplace from the repo's skills/ and mcps/ directories.
  *
- * Reads each top-level skill directory containing a SKILL.md and generates:
- *   - .claude-plugin/marketplace.json
- *   - .marketplace/fivetran-skills/.claude-plugin/plugin.json
- *   - .marketplace/fivetran-skills/.mcp.json           (merged from mcps/*\/.mcp.json and skills/*\/.mcp.json)
- *   - .marketplace/fivetran-skills/skills/<name>/...   (copied from skills/<name>/)
- *   - .marketplace/fivetran-skills/mcps/<name>/...     (copied from mcps/<name>/, excluding .mcp.json)
- *   - .marketplace/fivetran-skills/hooks/...           (copied from hooks/, if present)
+ * Plugins emitted:
+ *   - `base`: every skill without a `metadata.plugin` field, plus any MCP listed under
+ *     `base` in mcps/plugins.json (and any MCP without an entry).
+ *   - one plugin per distinct `metadata.plugin` value declared in skill frontmatter
+ *     and/or per plugin name appearing in mcps/plugins.json.
+ *   - `all`: every skill and every MCP, regardless of declarations.
+ *
+ * Hooks from hooks/ are copied into every plugin.
  *
  * Usage:
  *   node scripts/generate-marketplace.mjs
@@ -22,21 +23,22 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const marketplaceName = "skills-prototype";
-const pluginName = "fivetran-skills";
-const ownerName = "Test";
+const ownerName = "Fivetran";
 const skillsRoot = path.join(repoRoot, "skills");
 const mcpsRoot = path.join(repoRoot, "mcps");
+const mcpsPluginsJsonPath = path.join(mcpsRoot, "plugins.json");
 const hooksRoot = path.join(repoRoot, "hooks");
 const generatedRoot = path.join(repoRoot, ".marketplace");
-const pluginRoot = path.join(generatedRoot, pluginName);
-const pluginJsonPath = path.join(pluginRoot, ".claude-plugin", "plugin.json");
-const contentHashPath = path.join(pluginRoot, ".claude-plugin", ".content-hash");
-const mergedMcpPath = path.join(pluginRoot, ".mcp.json");
-const copiedSkillsRoot = path.join(pluginRoot, "skills");
-const copiedMcpsRoot = path.join(pluginRoot, "mcps");
-const copiedHooksRoot = path.join(pluginRoot, "hooks");
 const marketplacePath = path.join(repoRoot, ".claude-plugin", "marketplace.json");
 const checkMode = process.argv.includes("--check");
+
+const BASE_PLUGIN = "base";
+const ALL_PLUGIN = "all";
+const RESERVED_PLUGIN_NAMES = new Set([BASE_PLUGIN, ALL_PLUGIN]);
+
+// ---------------------------------------------------------------------------
+// Frontmatter parsing
+// ---------------------------------------------------------------------------
 
 function parseFrontmatter(content) {
   if (!content.startsWith("---\n")) return null;
@@ -52,6 +54,41 @@ function extractField(yaml, field) {
   return match[1].replace(/^['"]|['"]$/g, "").trim();
 }
 
+function parseMetadataField(yaml, field) {
+  const lines = yaml.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const inlineMatch = lines[i].match(/^\s*metadata:\s*\{(.*)\}\s*$/);
+    if (inlineMatch) {
+      const fieldMatch = inlineMatch[1].match(
+        new RegExp(`(?:^|,)\\s*${field}:\\s*([^,}]+)\\s*(?:,|$)`),
+      );
+      return fieldMatch
+        ? fieldMatch[1].replace(/^['"]|['"]$/g, "").trim()
+        : "";
+    }
+    const blockMatch = lines[i].match(/^(\s*)metadata:\s*$/);
+    if (!blockMatch) continue;
+    const metaIndent = blockMatch[1].length;
+    for (let j = i + 1; j < lines.length; j++) {
+      if (!lines[j].trim()) continue;
+      const indent = (lines[j].match(/^(\s*)/)?.[1] ?? "").length;
+      if (indent <= metaIndent) break;
+      const fieldMatch = lines[j].match(
+        new RegExp(`^\\s*${field}:\\s*(.+)\\s*$`),
+      );
+      if (fieldMatch) {
+        return fieldMatch[1].replace(/^['"]|['"]$/g, "").trim();
+      }
+    }
+    return "";
+  }
+  return "";
+}
+
+// ---------------------------------------------------------------------------
+// Discovery
+// ---------------------------------------------------------------------------
+
 function discoverSkills() {
   const skills = [];
   if (!fs.existsSync(skillsRoot)) return skills;
@@ -65,10 +102,22 @@ function discoverSkills() {
     const content = fs.readFileSync(skillMdPath, "utf8");
     const yaml = parseFrontmatter(content);
     const name = yaml ? extractField(yaml, "name") || entry.name : entry.name;
+    const plugin = yaml ? parseMetadataField(yaml, "plugin") : "";
+    const shortDescription = yaml ? parseMetadataField(yaml, "short-description") : "";
+
+    if (plugin && RESERVED_PLUGIN_NAMES.has(plugin)) {
+      throw new Error(
+        `Skill "${entry.name}" declares metadata.plugin="${plugin}", which is reserved. ` +
+          `Skills with no metadata.plugin go to "${BASE_PLUGIN}" automatically; every skill is ` +
+          `included in "${ALL_PLUGIN}". Pick a different plugin name or remove the field.`,
+      );
+    }
 
     skills.push({
       dirName: entry.name,
       name,
+      plugin: plugin || "",
+      shortDescription,
     });
   }
 
@@ -86,6 +135,49 @@ function discoverMcps() {
 
   return mcps.sort((a, b) => a.dirName.localeCompare(b.dirName));
 }
+
+function readMcpsPluginsJson(mcps) {
+  const mcpDirs = new Set(mcps.map((m) => m.dirName));
+  const mapping = new Map();
+
+  if (!fs.existsSync(mcpsPluginsJsonPath)) {
+    return mapping;
+  }
+
+  const parsed = readJsonFile(mcpsPluginsJsonPath);
+  if (!isPlainObject(parsed)) {
+    throw new Error(`Expected ${pathFromRepo(mcpsPluginsJsonPath)} to contain a JSON object.`);
+  }
+
+  for (const [mcpName, plugins] of Object.entries(parsed)) {
+    if (!Array.isArray(plugins) || !plugins.every((p) => typeof p === "string")) {
+      throw new Error(
+        `Expected ${pathFromRepo(mcpsPluginsJsonPath)} key "${mcpName}" to be an array of plugin name strings.`,
+      );
+    }
+    if (!mcpDirs.has(mcpName)) {
+      console.warn(
+        `  ⚠ ${pathFromRepo(mcpsPluginsJsonPath)} references "${mcpName}" but mcps/${mcpName}/ does not exist.`,
+      );
+      continue;
+    }
+    for (const plugin of plugins) {
+      if (plugin === ALL_PLUGIN) {
+        throw new Error(
+          `${pathFromRepo(mcpsPluginsJsonPath)}: MCP "${mcpName}" lists "${ALL_PLUGIN}", which is reserved. ` +
+            `Every MCP is automatically included in "${ALL_PLUGIN}".`,
+        );
+      }
+    }
+    mapping.set(mcpName, plugins);
+  }
+
+  return mapping;
+}
+
+// ---------------------------------------------------------------------------
+// JSON / file utilities
+// ---------------------------------------------------------------------------
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -145,12 +237,56 @@ function readJsonFile(filePath) {
   }
 }
 
-function discoverMcpConfigPaths(skills) {
+// ---------------------------------------------------------------------------
+// Plugin membership
+// ---------------------------------------------------------------------------
+
+/**
+ * Collect the full set of plugin names. Always includes `base` and `all`.
+ * Adds any plugin name declared via skill frontmatter or mcps/plugins.json.
+ */
+function collectPluginNames(skills, mcpPluginMap) {
+  const names = new Set([BASE_PLUGIN, ALL_PLUGIN]);
+  for (const skill of skills) {
+    if (skill.plugin) names.add(skill.plugin);
+  }
+  for (const plugins of mcpPluginMap.values()) {
+    for (const plugin of plugins) names.add(plugin);
+  }
+  return names;
+}
+
+function skillsForPlugin(pluginName, skills) {
+  if (pluginName === ALL_PLUGIN) return [...skills];
+  if (pluginName === BASE_PLUGIN) return skills.filter((s) => !s.plugin);
+  return skills.filter((s) => s.plugin === pluginName);
+}
+
+function mcpsForPlugin(pluginName, mcps, mcpPluginMap) {
+  if (pluginName === ALL_PLUGIN) return [...mcps];
+
+  return mcps.filter((mcp) => {
+    const plugins = mcpPluginMap.get(mcp.dirName);
+    if (!plugins) {
+      // Unlisted MCPs default to `base` (and `all`, handled above).
+      return pluginName === BASE_PLUGIN;
+    }
+    return plugins.includes(pluginName);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Merged .mcp.json per plugin
+// ---------------------------------------------------------------------------
+
+function discoverMcpConfigPathsForPlugin(pluginSkills, pluginMcps) {
   const configPaths = [];
 
-  configPaths.push(...findFilesNamed(mcpsRoot, ".mcp.json"));
+  for (const mcp of pluginMcps) {
+    configPaths.push(...findFilesNamed(path.join(mcpsRoot, mcp.dirName), ".mcp.json"));
+  }
 
-  for (const skill of skills) {
+  for (const skill of pluginSkills) {
     const skillRoot = path.join(skillsRoot, skill.dirName);
     configPaths.push(...findFilesNamed(skillRoot, ".mcp.json"));
   }
@@ -158,8 +294,7 @@ function discoverMcpConfigPaths(skills) {
   return [...new Set(configPaths)].sort();
 }
 
-function mergeMcpConfigs(skills) {
-  const configPaths = discoverMcpConfigPaths(skills);
+function mergeMcpConfigs(configPaths) {
   if (configPaths.length === 0) return null;
 
   const mergedServers = new Map();
@@ -212,6 +347,10 @@ function mergeMcpConfigs(skills) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Hashing & versioning
+// ---------------------------------------------------------------------------
+
 function hashDirectory(dir, { skipFileNames } = {}) {
   const skip = new Set(skipFileNames ?? []);
   const hash = crypto.createHash("sha256");
@@ -246,10 +385,10 @@ function hashDirectory(dir, { skipFileNames } = {}) {
   return hash.digest("hex");
 }
 
-function computePluginHash(skills, mcps, mergedMcpConfig) {
+function computePluginHash(pluginSkills, pluginMcps, mergedMcpConfig) {
   const hash = crypto.createHash("sha256");
-  const sortedSkills = [...skills].sort((a, b) => a.dirName.localeCompare(b.dirName));
-  const sortedMcps = [...mcps].sort((a, b) => a.dirName.localeCompare(b.dirName));
+  const sortedSkills = [...pluginSkills].sort((a, b) => a.dirName.localeCompare(b.dirName));
+  const sortedMcps = [...pluginMcps].sort((a, b) => a.dirName.localeCompare(b.dirName));
 
   for (const skill of sortedSkills) {
     hash.update(`skill:${skill.dirName}`);
@@ -283,7 +422,7 @@ function bumpPatch(version) {
   return parts.join(".");
 }
 
-function resolveVersion(nextHash) {
+function resolveVersion(pluginJsonPath, contentHashPath, nextHash) {
   const baseVersion = "1.0.0";
 
   if (!fs.existsSync(pluginJsonPath)) {
@@ -312,23 +451,38 @@ function resolveVersion(nextHash) {
   return { version: bumpPatch(existingVersion), hashChanged: true };
 }
 
-function buildPluginDescription(skills) {
-  const skillNames = skills.map((skill) => skill.name).join(", ");
-  return skillNames ? `Skills: ${skillNames}` : "Skills";
+// ---------------------------------------------------------------------------
+// Plugin descriptions
+// ---------------------------------------------------------------------------
+
+function buildPluginDescription(pluginName, pluginSkills) {
+  if (pluginSkills.length === 1) {
+    const [only] = pluginSkills;
+    return only.shortDescription || only.name;
+  }
+
+  const skillNames = pluginSkills.map((skill) => skill.name).join(", ");
+  if (pluginName === ALL_PLUGIN) {
+    return skillNames ? `All skills: ${skillNames}` : "All skills";
+  }
+  if (pluginName === BASE_PLUGIN) {
+    return skillNames ? `Base skills: ${skillNames}` : "Base skills";
+  }
+  return skillNames ? `${pluginName} skills: ${skillNames}` : `${pluginName} skills`;
 }
 
-function generatePluginJson(skills, version) {
+function generatePluginJson(pluginName, pluginSkills, version) {
   return {
     name: pluginName,
     version,
-    description: buildPluginDescription(skills),
+    description: buildPluginDescription(pluginName, pluginSkills),
     author: {
       name: ownerName,
     },
   };
 }
 
-function generateMarketplaceJson(skills) {
+function generateMarketplaceJson(orderedPlugins) {
   return {
     name: marketplaceName,
     owner: {
@@ -337,15 +491,17 @@ function generateMarketplaceJson(skills) {
     metadata: {
       description: "Skills and plugins prototype for agents like Claude Code.",
     },
-    plugins: [
-      {
-        name: pluginName,
-        source: `./.marketplace/${pluginName}`,
-        description: buildPluginDescription(skills),
-      },
-    ],
+    plugins: orderedPlugins.map(({ name, skills }) => ({
+      name,
+      source: `./.marketplace/${name}`,
+      description: buildPluginDescription(name, skills),
+    })),
   };
 }
+
+// ---------------------------------------------------------------------------
+// File-system writes
+// ---------------------------------------------------------------------------
 
 function writeFileIfChanged(filePath, content) {
   const dir = path.dirname(filePath);
@@ -438,26 +594,32 @@ function cleanupStaleEntries(dir, validNames) {
   return changed;
 }
 
-function main() {
-  const skills = discoverSkills();
-  if (skills.length === 0) {
-    console.error("No skills found in skills/");
-    process.exit(1);
-  }
+// ---------------------------------------------------------------------------
+// Per-plugin emission
+// ---------------------------------------------------------------------------
 
-  const mcps = discoverMcps();
+function emitPlugin(pluginName, pluginSkills, pluginMcps, log) {
+  const pluginRoot = path.join(generatedRoot, pluginName);
+  const pluginJsonPath = path.join(pluginRoot, ".claude-plugin", "plugin.json");
+  const contentHashPath = path.join(pluginRoot, ".claude-plugin", ".content-hash");
+  const mergedMcpPath = path.join(pluginRoot, ".mcp.json");
+  const copiedSkillsRoot = path.join(pluginRoot, "skills");
+  const copiedMcpsRoot = path.join(pluginRoot, "mcps");
+  const copiedHooksRoot = path.join(pluginRoot, "hooks");
 
   let changed = false;
-  const mergedMcpConfig = mergeMcpConfigs(skills);
 
-  const contentHash = computePluginHash(skills, mcps, mergedMcpConfig);
-  const { version, hashChanged } = resolveVersion(contentHash);
+  const configPaths = discoverMcpConfigPathsForPlugin(pluginSkills, pluginMcps);
+  const mergedMcpConfig = mergeMcpConfigs(configPaths);
 
-  if (writeJsonIfChanged(pluginJsonPath, generatePluginJson(skills, version))) {
+  const contentHash = computePluginHash(pluginSkills, pluginMcps, mergedMcpConfig);
+  const { version, hashChanged } = resolveVersion(pluginJsonPath, contentHashPath, contentHash);
+
+  if (writeJsonIfChanged(pluginJsonPath, generatePluginJson(pluginName, pluginSkills, version))) {
     changed = true;
     if (!checkMode) {
       const verb = hashChanged ? `Updated (${version})` : "Updated";
-      console.log(`  ${verb} ${path.relative(repoRoot, pluginJsonPath)}`);
+      log(`  ${verb} ${path.relative(repoRoot, pluginJsonPath)}`);
     }
   }
 
@@ -468,39 +630,35 @@ function main() {
   if (mergedMcpConfig) {
     if (writeJsonIfChanged(mergedMcpPath, mergedMcpConfig)) {
       changed = true;
-      if (!checkMode) {
-        console.log(`  Updated ${path.relative(repoRoot, mergedMcpPath)}`);
-      }
+      if (!checkMode) log(`  Updated ${path.relative(repoRoot, mergedMcpPath)}`);
     }
   } else if (removeFileIfExists(mergedMcpPath)) {
     changed = true;
-    if (!checkMode) {
-      console.log(`  Removed ${path.relative(repoRoot, mergedMcpPath)}`);
-    }
+    if (!checkMode) log(`  Removed ${path.relative(repoRoot, mergedMcpPath)}`);
   }
 
-  for (const skill of skills) {
+  for (const skill of pluginSkills) {
     const sourcePath = path.join(skillsRoot, skill.dirName);
     const copiedPath = path.join(copiedSkillsRoot, skill.dirName);
 
     if (syncDirectoryCopy(copiedPath, sourcePath)) {
       changed = true;
       if (!checkMode) {
-        console.log(
+        log(
           `  Synced ${path.relative(repoRoot, copiedPath)} from ${path.relative(repoRoot, sourcePath)}`,
         );
       }
     }
   }
 
-  for (const mcp of mcps) {
+  for (const mcp of pluginMcps) {
     const sourcePath = path.join(mcpsRoot, mcp.dirName);
     const copiedPath = path.join(copiedMcpsRoot, mcp.dirName);
 
     if (syncDirectoryCopy(copiedPath, sourcePath, { skipFileNames: [".mcp.json"] })) {
       changed = true;
       if (!checkMode) {
-        console.log(
+        log(
           `  Synced ${path.relative(repoRoot, copiedPath)} from ${path.relative(repoRoot, sourcePath)}`,
         );
       }
@@ -511,7 +669,7 @@ function main() {
     if (syncDirectoryCopy(copiedHooksRoot, hooksRoot)) {
       changed = true;
       if (!checkMode) {
-        console.log(
+        log(
           `  Synced ${path.relative(repoRoot, copiedHooksRoot)} from ${path.relative(repoRoot, hooksRoot)}`,
         );
       }
@@ -519,39 +677,69 @@ function main() {
   } else if (fs.existsSync(copiedHooksRoot)) {
     if (!checkMode) fs.rmSync(copiedHooksRoot, { recursive: true, force: true });
     changed = true;
-    if (!checkMode) {
-      console.log(`  Removed ${path.relative(repoRoot, copiedHooksRoot)}`);
-    }
+    if (!checkMode) log(`  Removed ${path.relative(repoRoot, copiedHooksRoot)}`);
   }
 
-  if (cleanupStaleEntries(copiedSkillsRoot, new Set(skills.map((skill) => skill.dirName)))) {
+  if (cleanupStaleEntries(copiedSkillsRoot, new Set(pluginSkills.map((s) => s.dirName)))) {
     changed = true;
-    if (!checkMode) {
-      console.log(`  Cleaned stale entries in ${path.relative(repoRoot, copiedSkillsRoot)}`);
-    }
+    if (!checkMode) log(`  Cleaned stale entries in ${path.relative(repoRoot, copiedSkillsRoot)}`);
   }
 
   if (fs.existsSync(copiedMcpsRoot)) {
-    if (cleanupStaleEntries(copiedMcpsRoot, new Set(mcps.map((mcp) => mcp.dirName)))) {
+    if (cleanupStaleEntries(copiedMcpsRoot, new Set(pluginMcps.map((m) => m.dirName)))) {
       changed = true;
-      if (!checkMode) {
-        console.log(`  Cleaned stale entries in ${path.relative(repoRoot, copiedMcpsRoot)}`);
-      }
+      if (!checkMode) log(`  Cleaned stale entries in ${path.relative(repoRoot, copiedMcpsRoot)}`);
     }
   }
 
-  if (cleanupStaleEntries(generatedRoot, new Set([pluginName]))) {
-    changed = true;
-    if (!checkMode) {
-      console.log(`  Cleaned stale entries in ${path.relative(repoRoot, generatedRoot)}`);
+  return changed;
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+function orderPlugins(pluginNames) {
+  const named = [...pluginNames]
+    .filter((n) => !RESERVED_PLUGIN_NAMES.has(n))
+    .sort((a, b) => a.localeCompare(b));
+  return [BASE_PLUGIN, ...named, ALL_PLUGIN];
+}
+
+function main() {
+  const skills = discoverSkills();
+  if (skills.length === 0) {
+    console.error("No skills found in skills/");
+    process.exit(1);
+  }
+
+  const mcps = discoverMcps();
+  const mcpPluginMap = readMcpsPluginsJson(mcps);
+  const pluginNames = collectPluginNames(skills, mcpPluginMap);
+  const ordered = orderPlugins(pluginNames);
+
+  let changed = false;
+  const orderedForMarketplace = [];
+
+  for (const pluginName of ordered) {
+    const pluginSkills = skillsForPlugin(pluginName, skills);
+    const pluginMcps = mcpsForPlugin(pluginName, mcps, mcpPluginMap);
+    orderedForMarketplace.push({ name: pluginName, skills: pluginSkills });
+
+    if (!checkMode) console.log(`Plugin: ${pluginName}`);
+    if (emitPlugin(pluginName, pluginSkills, pluginMcps, console.log)) {
+      changed = true;
     }
   }
 
-  if (writeJsonIfChanged(marketplacePath, generateMarketplaceJson(skills))) {
+  if (cleanupStaleEntries(generatedRoot, new Set(ordered))) {
     changed = true;
-    if (!checkMode) {
-      console.log(`  Updated ${path.relative(repoRoot, marketplacePath)}`);
-    }
+    if (!checkMode) console.log(`  Cleaned stale entries in ${path.relative(repoRoot, generatedRoot)}`);
+  }
+
+  if (writeJsonIfChanged(marketplacePath, generateMarketplaceJson(orderedForMarketplace))) {
+    changed = true;
+    if (!checkMode) console.log(`  Updated ${path.relative(repoRoot, marketplacePath)}`);
   }
 
   if (checkMode) {
@@ -568,7 +756,7 @@ function main() {
 
   if (changed) {
     console.log(
-      `\nGenerated marketplace with 1 plugin from ${skills.length} skill(s) and ${mcps.length} mcp(s).`,
+      `\nGenerated marketplace with ${ordered.length} plugin(s) from ${skills.length} skill(s) and ${mcps.length} mcp(s).`,
     );
   } else {
     console.log("Marketplace files are already up to date.");

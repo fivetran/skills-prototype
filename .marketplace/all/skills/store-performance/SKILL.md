@@ -14,6 +14,7 @@ description: >
   "BFCM", "Cyber Monday", "Q4 performance", "monthly orders", "seasonality".
 allowed-tools: "bash(bq, gcloud, snow, snowsql, databricks, open, python3, pip)"
 metadata:
+  plugin: store-performance
   short-description: E-commerce store performance analysis from raw Shopify connector data
   owner: "Abdul Ghaffar <abdul.ghaffar@fivetran.com>"
 user-invocable: true

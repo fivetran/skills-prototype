@@ -1,0 +1,8 @@
+{
+  "name": "all",
+  "version": "1.0.3",
+  "description": "All skills: ad-performance, store-performance, test-skill",
+  "author": {
+    "name": "Fivetran"
+  }
+}

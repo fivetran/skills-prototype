@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "test-mcp": {
+      "args": [
+        "run",
+        "--with",
+        "fastmcp",
+        "mcps/test/server.py"
+      ],
+      "command": "uv",
+      "env": {
+        "TEST_MCP_JSON_ENV_EXPANSION": "${TEST_ENV_VARIABLE:-default-from-.mcp.json}",
+        "TEST_MCP_JSON_VARIABLE": "Set from repo's .mcp.json"
+      }
+    }
+  }
+}
