@@ -256,6 +256,28 @@ function readJsonFile(filePath) {
   }
 }
 
+function directoryHasCopyableEntries(srcPath, { skipFileNames } = {}) {
+  if (!fs.existsSync(srcPath)) return false;
+
+  const skip = new Set(skipFileNames ?? []);
+
+  for (const entry of fs.readdirSync(srcPath, { withFileTypes: true })) {
+    if (skip.has(entry.name)) continue;
+
+    const fullPath = path.join(srcPath, entry.name);
+    if (entry.isDirectory()) {
+      if (directoryHasCopyableEntries(fullPath, { skipFileNames })) {
+        return true;
+      }
+      continue;
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
 function pluginManifestOverridePath(pluginName) {
   return path.join(pluginsRoot, pluginName, "plugin.json");
 }
@@ -570,7 +592,7 @@ function writeJsonIfChanged(filePath, data) {
 function removeFileIfExists(filePath) {
   if (!fs.existsSync(filePath)) return false;
   if (checkMode) return true;
-  fs.rmSync(filePath, { force: true });
+  fs.rmSync(filePath, { recursive: true, force: true });
   return true;
 }
 
@@ -712,6 +734,16 @@ function emitPlugin(pluginName, pluginSkills, pluginMcps, log) {
   for (const mcp of pluginMcps) {
     const sourcePath = path.join(mcpsRoot, mcp.dirName);
     const copiedPath = path.join(copiedMcpsRoot, mcp.dirName);
+
+    if (!directoryHasCopyableEntries(sourcePath, { skipFileNames: [".mcp.json"] })) {
+      if (removeFileIfExists(copiedPath)) {
+        changed = true;
+        if (!checkMode) {
+          log(`  Removed empty ${path.relative(repoRoot, copiedPath)}`);
+        }
+      }
+      continue;
+    }
 
     if (syncDirectoryCopy(copiedPath, sourcePath, { skipFileNames: [".mcp.json"] })) {
       changed = true;
