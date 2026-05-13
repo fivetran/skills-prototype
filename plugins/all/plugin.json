@@ -1,0 +1,25 @@
+{
+  "userConfig": {
+    "fivetran_allow_writes": {
+      "type": "boolean",
+      "title": "Enable Fivetran writes",
+      "description": "Allow the Fivetran MCP server to perform write operations",
+      "default": false,
+      "required": false
+    },
+    "fivetran_api_key": {
+      "type": "string",
+      "title": "Fivetran API key",
+      "description": "API key for the Fivetran account this plugin should connect to",
+      "sensitive": true,
+      "required": true
+    },
+    "fivetran_api_secret": {
+      "type": "string",
+      "title": "Fivetran API secret",
+      "description": "API secret paired with the configured Fivetran API key",
+      "sensitive": true,
+      "required": true
+    }
+  }
+}

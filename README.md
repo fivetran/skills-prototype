@@ -3,7 +3,7 @@
 Prototype of AI Tools Repository. Includes
 - `skills/` directory of all agent skills
 - `.mcp.json` definition of all related MCP servers
-- Marketplace plugin that bundles `skills/` and `mcps/` via GitHub action workflow
+- Marketplace plugin that bundles `skills/`, `mcps/`, and plugin manifest overrides via GitHub action workflow
 
 ## Installation
 
@@ -16,7 +16,16 @@ See [Vercel's Skills docs](https://github.com/vercel-labs/skills) for more detai
 
 
 ### MCP
-`npx add-mcp` doesn't work as is because the test mcp server here isn't setup as its own package (TODO). See [Neon's add-mcp docs](https://github.com/neondatabase/add-mcp) for more info on how it might work.
+The bundled Fivetran MCP server uses the published `uvx` launcher from
+[fivetran/fivetran-mcp](https://github.com/fivetran/fivetran-mcp):
+
+```bash
+uvx --from git+https://github.com/fivetran/fivetran-mcp fivetran-mcp
+```
+
+When the `base` or `all` plugin is enabled, Claude Code prompts for the Fivetran
+API key and API secret via `userConfig` and injects them into the MCP server
+configuration automatically.
 
 
 ### Claude Code CLI
@@ -40,7 +49,8 @@ Source (hand-edited):
 - `skills/<name>/SKILL.md` — skill definitions. Add `metadata.plugin: <plugin-name>` to route a skill into a named plugin; skills with no `plugin` field land in `base`. (`base` and `all` are reserved.)
 - `mcps/<name>/.mcp.json` — MCP server config fragments (merged at build)
 - `mcps/<name>/` — MCP server source files
-- `mcps/plugins.json` *(optional)* — maps each MCP directory name to an array of plugin names it should ship in. Example: `{ "test": ["ad-analytics"] }`. MCPs with no entry default to `base`. Every MCP also ships in `all` regardless.
+- `plugins/<name>/plugin.json` *(optional)* — manifest overrides merged into the generated plugin manifest. Use this for fields like `userConfig`.
+- `mcps/plugins.json` *(optional)* — maps each MCP directory name to an array of plugin names it should ship in. Example: `{ "fivetran": ["ad-analytics"] }`. MCPs with no entry default to `base`. Every MCP also ships in `all` regardless.
 - `hooks/hooks.json` + `hooks/*.sh` — plugin hooks (see **Analytics hook** below). Copied into every plugin.
 
 Plugins emitted:

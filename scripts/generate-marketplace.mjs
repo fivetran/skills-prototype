@@ -26,6 +26,7 @@ const marketplaceName = "skills-prototype";
 const ownerName = "Fivetran";
 const skillsRoot = path.join(repoRoot, "skills");
 const mcpsRoot = path.join(repoRoot, "mcps");
+const pluginsRoot = path.join(repoRoot, "plugins");
 const mcpsPluginsJsonPath = path.join(mcpsRoot, "plugins.json");
 const hooksRoot = path.join(repoRoot, "hooks");
 const generatedRoot = path.join(repoRoot, ".marketplace");
@@ -183,6 +184,24 @@ function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function mergeObjects(base, override) {
+  if (!isPlainObject(base) || !isPlainObject(override)) {
+    return sortJsonValue(override);
+  }
+
+  const merged = { ...base };
+  for (const [key, overrideValue] of Object.entries(override)) {
+    const baseValue = merged[key];
+    if (isPlainObject(baseValue) && isPlainObject(overrideValue)) {
+      merged[key] = mergeObjects(baseValue, overrideValue);
+      continue;
+    }
+    merged[key] = sortJsonValue(overrideValue);
+  }
+
+  return sortJsonValue(merged);
+}
+
 function sortJsonValue(value) {
   if (Array.isArray(value)) {
     return value.map(sortJsonValue);
@@ -235,6 +254,44 @@ function readJsonFile(filePath) {
   } catch (error) {
     throw new Error(`Invalid JSON in ${pathFromRepo(filePath)}: ${error.message}`);
   }
+}
+
+function directoryHasCopyableEntries(srcPath, { skipFileNames } = {}) {
+  if (!fs.existsSync(srcPath)) return false;
+
+  const skip = new Set(skipFileNames ?? []);
+
+  for (const entry of fs.readdirSync(srcPath, { withFileTypes: true })) {
+    if (skip.has(entry.name)) continue;
+
+    const fullPath = path.join(srcPath, entry.name);
+    if (entry.isDirectory()) {
+      if (directoryHasCopyableEntries(fullPath, { skipFileNames })) {
+        return true;
+      }
+      continue;
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
+function pluginManifestOverridePath(pluginName) {
+  return path.join(pluginsRoot, pluginName, "plugin.json");
+}
+
+function readPluginManifestOverride(pluginName) {
+  const overridePath = pluginManifestOverridePath(pluginName);
+  if (!fs.existsSync(overridePath)) return null;
+
+  const parsed = readJsonFile(overridePath);
+  if (!isPlainObject(parsed)) {
+    throw new Error(`Expected ${pathFromRepo(overridePath)} to contain a JSON object.`);
+  }
+
+  return parsed;
 }
 
 // ---------------------------------------------------------------------------
@@ -385,7 +442,7 @@ function hashDirectory(dir, { skipFileNames } = {}) {
   return hash.digest("hex");
 }
 
-function computePluginHash(pluginSkills, pluginMcps, mergedMcpConfig) {
+function computePluginHash(pluginName, pluginSkills, pluginMcps, mergedMcpConfig, manifestOverride) {
   const hash = crypto.createHash("sha256");
   const sortedSkills = [...pluginSkills].sort((a, b) => a.dirName.localeCompare(b.dirName));
   const sortedMcps = [...pluginMcps].sort((a, b) => a.dirName.localeCompare(b.dirName));
@@ -407,6 +464,10 @@ function computePluginHash(pluginSkills, pluginMcps, mergedMcpConfig) {
 
   hash.update("merged-mcp");
   hash.update(mergedMcpConfig ? stableJsonStringify(mergedMcpConfig) : "");
+
+  hash.update("manifest-override");
+  hash.update(`plugin:${pluginName}`);
+  hash.update(manifestOverride ? stableJsonStringify(manifestOverride) : "");
 
   return hash.digest("hex");
 }
@@ -471,14 +532,21 @@ function buildPluginDescription(pluginName, pluginSkills) {
   return skillNames ? `${pluginName} skills: ${skillNames}` : `${pluginName} skills`;
 }
 
-function generatePluginJson(pluginName, pluginSkills, version) {
-  return {
+function generatePluginJson(pluginName, pluginSkills, version, manifestOverride = null) {
+  const generated = {
     name: pluginName,
     version,
     description: buildPluginDescription(pluginName, pluginSkills),
     author: {
       name: ownerName,
     },
+  };
+
+  const merged = manifestOverride ? mergeObjects(generated, manifestOverride) : generated;
+  return {
+    ...merged,
+    name: pluginName,
+    version,
   };
 }
 
@@ -524,7 +592,7 @@ function writeJsonIfChanged(filePath, data) {
 function removeFileIfExists(filePath) {
   if (!fs.existsSync(filePath)) return false;
   if (checkMode) return true;
-  fs.rmSync(filePath, { force: true });
+  fs.rmSync(filePath, { recursive: true, force: true });
   return true;
 }
 
@@ -611,11 +679,23 @@ function emitPlugin(pluginName, pluginSkills, pluginMcps, log) {
 
   const configPaths = discoverMcpConfigPathsForPlugin(pluginSkills, pluginMcps);
   const mergedMcpConfig = mergeMcpConfigs(configPaths);
+  const manifestOverride = readPluginManifestOverride(pluginName);
 
-  const contentHash = computePluginHash(pluginSkills, pluginMcps, mergedMcpConfig);
+  const contentHash = computePluginHash(
+    pluginName,
+    pluginSkills,
+    pluginMcps,
+    mergedMcpConfig,
+    manifestOverride,
+  );
   const { version, hashChanged } = resolveVersion(pluginJsonPath, contentHashPath, contentHash);
 
-  if (writeJsonIfChanged(pluginJsonPath, generatePluginJson(pluginName, pluginSkills, version))) {
+  if (
+    writeJsonIfChanged(
+      pluginJsonPath,
+      generatePluginJson(pluginName, pluginSkills, version, manifestOverride),
+    )
+  ) {
     changed = true;
     if (!checkMode) {
       const verb = hashChanged ? `Updated (${version})` : "Updated";
@@ -654,6 +734,16 @@ function emitPlugin(pluginName, pluginSkills, pluginMcps, log) {
   for (const mcp of pluginMcps) {
     const sourcePath = path.join(mcpsRoot, mcp.dirName);
     const copiedPath = path.join(copiedMcpsRoot, mcp.dirName);
+
+    if (!directoryHasCopyableEntries(sourcePath, { skipFileNames: [".mcp.json"] })) {
+      if (removeFileIfExists(copiedPath)) {
+        changed = true;
+        if (!checkMode) {
+          log(`  Removed empty ${path.relative(repoRoot, copiedPath)}`);
+        }
+      }
+      continue;
+    }
 
     if (syncDirectoryCopy(copiedPath, sourcePath, { skipFileNames: [".mcp.json"] })) {
       changed = true;
