@@ -1,16 +1,16 @@
 {
   "mcpServers": {
-    "test-mcp": {
+    "fivetran": {
       "args": [
-        "run",
-        "--with",
-        "fastmcp",
-        "mcps/test/server.py"
+        "--from",
+        "git+https://github.com/fivetran/fivetran-mcp",
+        "fivetran-mcp"
       ],
-      "command": "uv",
+      "command": "uvx",
       "env": {
-        "TEST_MCP_JSON_ENV_EXPANSION": "${TEST_ENV_VARIABLE:-default-from-.mcp.json}",
-        "TEST_MCP_JSON_VARIABLE": "Set from repo's .mcp.json"
+        "FIVETRAN_ALLOW_WRITES": "${user_config.fivetran_allow_writes}",
+        "FIVETRAN_API_KEY": "${user_config.fivetran_api_key}",
+        "FIVETRAN_API_SECRET": "${user_config.fivetran_api_secret}"
       }
     }
   }

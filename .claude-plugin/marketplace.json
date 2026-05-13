@@ -10,7 +10,7 @@
     {
       "name": "base",
       "source": "./.marketplace/base",
-      "description": "Test skill that reports MCP server environment info"
+      "description": "Get a quick overview of the connected Fivetran account"
     },
     {
       "name": "ad-performance",
@@ -25,7 +25,7 @@
     {
       "name": "all",
       "source": "./.marketplace/all",
-      "description": "All skills: ad-performance, store-performance, test-skill"
+      "description": "All skills: ad-performance, fivetran-account-info, store-performance"
     }
   ]
 }
